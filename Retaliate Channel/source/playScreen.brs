@@ -1,9 +1,13 @@
 Function Start(screen,port,difficulty,sounds) 
     'print "Difficulty = : " ; difficulty
     di = CreateObject("roDeviceInfo")
+    'print "starting round"
     this = {
-        'set general variables
+        'set globals
+        music_port: CreateObject("roMessagePort")
+        flame_animation_timer: CreateObject("roTimeSpan")
         timer: CreateObject("roTimeSpan")
+        shield_animation_timer: CreateObject("roTimeSpan")
         background_timer: CreateObject("roTimeSpan")
         ship_timer: CreateObject("roTimeSpan")
         registry: CreateObject("roRegistrySection", "music")
@@ -67,6 +71,8 @@ Function Start(screen,port,difficulty,sounds)
         LinearTween: linear_tween
         
         'set game variables
+        flame_sprite: 0
+        active_ship: "ship_1"
         down_pressed: 0
         moving_left: 0
         moving_right: 0
@@ -97,6 +103,13 @@ Function Start(screen,port,difficulty,sounds)
         script_wedge_count_2: 7
         script_frown_count: 5
         hell_alternate: 1
+        rnd_shield: 0
+        rnd_shield_old: 0
+        x_offset: 0
+        y_offset: 0
+        ship_color: m.ship_color
+        active_ship: m.active_ship
+        shield_life_color: &h0000ffff
         
         'Set Optimization Variables
         spr_ship_x: 610
@@ -105,6 +118,7 @@ Function Start(screen,port,difficulty,sounds)
         spr_ship: ""
         spr_shield: ""
         spr_bullet: []
+        spr_fake_bullets: []
         spr_enemy_bullet: []
         spr_enemy_1: []
         spr_enemy_2: []
@@ -113,15 +127,15 @@ Function Start(screen,port,difficulty,sounds)
         spr_border_2: ""
         
         'create bitmaps
+        bm_flame: [CreateObject("roBitmap", "pkg:/sprites/spr_flame_0.png"),CreateObject("roBitmap", "pkg:/sprites/spr_flame_1.png")]
+        bm_ship: {}
         bm_ship_top: CreateObject("roBitmap", "pkg:/sprites/spr_ship_top.png") 
-        bm_ship_left: CreateObject("roBitmap", "pkg:/sprites/spr_ship_left.png")
-        bm_ship_right: CreateObject("roBitmap", "pkg:/sprites/spr_ship_right.png")
         bm_bullet: CreateObject("roBitmap", "pkg:/sprites/spr_bullet.png")  
         bm_enemy_bullet: CreateObject("roBitmap", "pkg:/sprites/spr_enemy_bullet.png")  
-        bm_shield: CreateObject("roBitmap", "pkg:/sprites/spr_shield.png")
+        bm_shield_invisible: CreateObject("roBitmap", "pkg:/sprites/spr_shield.png")
+        bm_shield: []
         bm_enemy_1: CreateObject("roBitmap", "pkg:/sprites/spr_enemy_1.png")
         bm_enemy_2: CreateObject("roBitmap", "pkg:/sprites/spr_enemy_2.png")
-        bm_background: CreateObject("roBitmap", "pkg:/sprites/spr_background.png")
         bm_border: CreateObject("roBitmap", "pkg:/sprites/spr_line.png")
         bm_explosion: [ CreateObject("roBitmap", "pkg:/sprites/spr_explosion_0.png"),
             CreateObject("roBitmap", "pkg:/sprites/spr_explosion_1.png"),
@@ -147,8 +161,6 @@ Function Start(screen,port,difficulty,sounds)
         
         'initialize regions
         region_ship_top: ""
-        region_ship_left: ""
-        region_ship_right: ""
         region_bullet: ""
         region_shield: ""
         region_enemy_1: ""
@@ -157,24 +169,52 @@ Function Start(screen,port,difficulty,sounds)
         region_border: ""
         
         }
-    'Start Music
-    this.background_music.url = "tmp:/snd_background_music.wma"
+        
+    'Set Shield Bitmap
+    for a = 0 to 3
+        for b = 0 to 3
+            this.bm_shield.Push(CreateObject("roBitmap", "pkg:/sprites/shield/spr_shield_"+a.tostr()+"_"+b.tostr()+".png"))
+        end for
+    end for
+        
+    'Set Shield Life Color
+    this.shield_life_color = HSVAtoRGBA(m.ship_color[m.active_ship].shield.hue,100,100,255)
+                
+        
+    'Set Ships Bitmaps
+    this.bm_ship.top_1 = CreateObject("roBitmap", "pkg:/sprites/ships/spr_"+m.active_ship+"_top_1.png") 
+    this.bm_ship.top_2 = CreateObject("roBitmap", "pkg:/sprites/ships/spr_"+m.active_ship+"_top_2.png")
+    this.bm_ship.top_3 = CreateObject("roBitmap", "pkg:/sprites/ships/spr_"+m.active_ship+"_top_3.png")
+    this.bm_ship.left_1 = CreateObject("roBitmap", "pkg:/sprites/ships/spr_"+m.active_ship+"_left_1.png") 
+    this.bm_ship.left_2 = CreateObject("roBitmap", "pkg:/sprites/ships/spr_"+m.active_ship+"_left_2.png")
+    this.bm_ship.left_3 = CreateObject("roBitmap", "pkg:/sprites/ships/spr_"+m.active_ship+"_left_3.png")
+    this.bm_ship.right_1 = CreateObject("roBitmap", "pkg:/sprites/ships/spr_"+m.active_ship+"_right_1.png") 
+    this.bm_ship.right_2 = CreateObject("roBitmap", "pkg:/sprites/ships/spr_"+m.active_ship+"_right_2.png")
+    this.bm_ship.right_3 = CreateObject("roBitmap", "pkg:/sprites/ships/spr_"+m.active_ship+"_right_3.png")
+    'Set Hex Color
+    'm.ship_color[this.active_ship].part_1.hex = HSVAtoRGBA(m.ship_color[this.active_ship].part_1.hue,m.ship_color[this.active_ship].part_1.sat,100,255)
+    'm.ship_color[this.active_ship].part_2.hex = HSVAtoRGBA(m.ship_color[this.active_ship].part_2.hue,m.ship_color[this.active_ship].part_2.sat,100,255)
+    'm.ship_color[this.active_ship].part_3.hex = HSVAtoRGBA(m.ship_color[this.active_ship].part_3.hue,m.ship_color[this.active_ship].part_3.sat,100,255)  
+    'm.ship_color.shield.hex = HSVAtoRGBA(m.ship_color.shield.hue,m.ship_color.shield.sat,100,255)
+    'Start music
+    this.background_music.url = "pkg:/sounds/snd_background_music.wma"
     this.audioplayer.addcontent(this.background_music)
-    this.audioplayer.setloop(true)
+    this.audioplayer.setloop(false)
+    this.audioplayer.setmessageport(this.music_port)
     this.audioplayer.play()
     
-    'Set Regions
+    'set regions
     this.font = this.font_registry.GetDefaultFont(this.font_registry.GetDefaultFontSize(), true, false)
-    this.region_ship_top = CreateObject("roRegion", this.bm_ship_top, 0, 0, 68, 89) 
-    this.region_ship_left = CreateObject("roRegion", this.bm_ship_left, 0, 0, 68, 89) 
-    this.region_ship_right = CreateObject("roRegion", this.bm_ship_right, 0, 0, 68, 89) 
+    this.region_ship_top = CreateObject("roRegion", this.bm_ship_top, 0, 0, 68, 89)  
     this.region_bullet = CreateObject("roRegion", this.bm_bullet, 0, 0, 9, 22)
     this.region_enemy_bullet = CreateObject("roRegion", this.bm_enemy_bullet, 0, 0, 9, 22)
-    this.region_shield = CreateObject("roRegion", this.bm_shield, 0, 0, 130, 130)
+    this.region_shield = CreateObject("roRegion", this.bm_shield_invisible, 0, 0, 130, 130)
+    this.region_shield.SetCollisionCircle(75, 75, 58)
+    this.region_shield.SetCollisionType(2)
     this.region_enemy_1 = CreateObject("roRegion", this.bm_enemy_1, 0, 0, 54, 67)
     this.region_enemy_2 = CreateObject("roRegion", this.bm_enemy_2, 0, 0, 59, 89)
     this.region_border = CreateObject("roRegion", this.bm_border, 0, 0, 4, 720)
-    this.region_background = CreateObject("roRegion", this.bm_background, 0, 0, 960, 720)
+    this.region_background = CreateObject("roRegion", m.bm_background, 0, 0, 960, 720)
     this.region_background.SetWrap(true)
     
     'Setup Screen    
@@ -193,8 +233,13 @@ Function Start(screen,port,difficulty,sounds)
     this.spr_ship.MoveTo(610,this.ship_y)
     this.compositor.DrawAll()
     this.screen.swapbuffers()
-
-    while (true)
+    while (true) 
+        music_msg = this.music_port.GetMessage() 
+        if type(music_msg) = "roAudioPlayerEvent"
+            if music_msg.isFullResult() or music_msg.isPartialResult()
+                this.audioplayer.play()
+            end if
+        end if
         msg = this.port.GetMessage() 
         if (type(msg) = "roUniversalControlEvent")
             'print "appRoScreen  index = "; msg.GetInt()
@@ -204,34 +249,18 @@ Function Start(screen,port,difficulty,sounds)
                 return results
             else if code = 4 'left pressed
                 if this.dead = 0 and this.paused = false
-                curPos = this.spr_ship.GetX()
-                this.spr_ship.Remove()
-                this.spr_ship = this.compositor.NewSprite(curPos, this.ship_y, this.region_ship_left)
-                this.spr_ship.SetData(-1)
                 this.moving_left = 1
                 end if
             else if code = 104 'left released
                 if this.dead = 0 and this.paused = false
-                curPos = this.spr_ship.GetX()
-                this.spr_ship.Remove()
-                this.spr_ship = this.compositor.NewSprite(curPos, this.ship_y, this.region_ship_top)
-                this.spr_ship.SetData(-1)
                 this.moving_left = 0
                 end if
             else if code = 5 'right pressed
                 if this.dead = 0 and this.paused = false
-                curPos = this.spr_ship.GetX()
-                this.spr_ship.Remove()
-                this.spr_ship = this.compositor.NewSprite(curPos, this.ship_y, this.region_ship_right)
-                this.spr_ship.SetData(-1)
                 this.moving_right = 1
                 end if
             else if code = 105 'right released
                 if this.dead = 0 and this.paused = false
-                curPos = this.spr_ship.GetX()
-                this.spr_ship.Remove()
-                this.spr_ship = this.compositor.NewSprite(curPos, this.ship_y, this.region_ship_top)
-                this.spr_ship.SetData(-1)
                 this.moving_right = 0
                 end if
             else if code = 2 'up pressed
@@ -279,6 +308,9 @@ Function Start(screen,port,difficulty,sounds)
                         data = item.GetData()
                         item.SetData({timer: data.timer,paused_time: data.paused_time+this.timer.TotalMilliseconds(), id: data.id})
                     end for
+                    for each item in this.spr_fake_bullets
+                        item.paused_timer = item.paused_time + this.timer.TotalMilliseconds()
+                    end for
                     this.paused_time_background = this.paused_time_background + this.timer.TotalMilliseconds()
                     this.paused_time_ship = this.paused_time_ship + this.timer.TotalMilliseconds()
                 end if
@@ -318,6 +350,64 @@ Function Start(screen,port,difficulty,sounds)
             this.MoveRight()
             this.Shield()
             this.compositor.DrawAll()
+            
+    
+            for each bullet in this.spr_fake_bullets 
+                newx = this.LinearTween(bullet.startx, this.spr_ship.GetX()+34-4, bullet.timer.TotalMilliseconds()-bullet.paused_time, 100)
+                newy = this.LinearTween(bullet.starty, this.spr_ship.GetY()+44-11, bullet.timer.TotalMilliseconds()-bullet.paused_time, 100)
+                newscale = this.LinearTween(1, 0.05, bullet.timer.TotalMilliseconds()-bullet.paused_time, 100)
+                this.screen.DrawScaledObject(newx,newy,newscale,newscale,this.bm_enemy_bullet)
+                if newscale <= 0.05 
+                    this.spr_fake_bullets.Shift()
+                end if
+            end for
+            if this.dead = 0
+                flame_left_offset = 0
+                flame_right_offset = 0
+                if this.moving_left = 1
+                    flame_left_offset = 1-this.move_speed
+                    flame_right_offset = -2-this.move_speed
+                    this.screen.DrawObject(this.spr_ship_x-this.move_speed-25, this.ship_y-15, this.bm_ship.left_1, m.ship_color[m.active_ship].part_1.hex)
+                    this.screen.DrawObject(this.spr_ship_x-this.move_speed-25, this.ship_y-15, this.bm_ship.left_2, m.ship_color[m.active_ship].part_2.hex)
+                    this.screen.DrawObject(this.spr_ship_x-this.move_speed-25, this.ship_y-15, this.bm_ship.left_3, m.ship_color[m.active_ship].part_3.hex)
+                end if
+                if this.moving_right = 1
+                    flame_left_offset = 2+this.move_speed
+                    flame_right_offset = -1+this.move_speed
+                    this.screen.DrawObject(this.spr_ship_x+this.move_speed-25, this.ship_y-15, this.bm_ship.right_1, m.ship_color[m.active_ship].part_1.hex)
+                    this.screen.DrawObject(this.spr_ship_x+this.move_speed-25, this.ship_y-15, this.bm_ship.right_2, m.ship_color[m.active_ship].part_2.hex)
+                    this.screen.DrawObject(this.spr_ship_x+this.move_speed-25, this.ship_y-15, this.bm_ship.right_3, m.ship_color[m.active_ship].part_3.hex)            
+                end if
+                if this.moving_left = 0 and this.moving_right = 0
+                    this.screen.DrawObject(this.spr_ship_x-25, this.ship_y-15, this.bm_ship.top_1, m.ship_color[m.active_ship].part_1.hex)
+                    this.screen.DrawObject(this.spr_ship_x-25, this.ship_y-15, this.bm_ship.top_2, m.ship_color[m.active_ship].part_2.hex)
+                    this.screen.DrawObject(this.spr_ship_x-25, this.ship_y-15, this.bm_ship.top_3, m.ship_color[m.active_ship].part_3.hex)
+                end if
+                if m.active_ship = "ship_5"
+                    this.screen.DrawObject(this.spr_ship_x-25+48+flame_left_offset, this.ship_y-20+96, this.bm_flame[this.flame_sprite])
+                    this.screen.DrawObject(this.spr_ship_x-25+63+flame_right_offset, this.ship_y-20+96, this.bm_flame[this.flame_sprite])
+                end if
+                if this.flame_animation_timer.TotalMilliseconds() > 25
+                    this.flame_animation_timer.Mark()
+                    if this.flame_sprite = 0
+                        this.flame_sprite = 1
+                    else 
+                        this.flame_sprite = 0
+                    end if
+                end if
+                if this.shield_on
+                    if this.shield_animation_timer.TotalMilliseconds() > 50
+                        this.rnd_shield_old = this.rnd_shield
+                        this.shield_animation_timer.Mark()
+                        set_shield_animation:
+                        this.rnd_shield = cint(rnd(16)-1)
+                        if this.rnd_shield = this.rnd_shield_old
+                            goto set_shield_animation
+                        end if
+                    end if
+                    this.screen.DrawObject(this.spr_ship_x-33-9, this.ship_y-21-10, this.bm_shield[this.rnd_shield], m.ship_color[m.active_ship].shield.hex)
+                end if
+            end if
             if this.dead = 1
                 this.CreatePlayerExplosion()
                 this.death_timer = this.death_timer + 1
@@ -406,6 +496,7 @@ End Function
 
 'Change player bullet position
 Function move_bullet()
+
     removed = -1
     for each bullet in m.spr_bullet 
         data = bullet.GetData()
@@ -427,6 +518,7 @@ End Function
 
 'Change enemy bullet position
 Function move_enemy_bullet()
+    
     removed = -1
     for each bullet in m.spr_enemy_bullet 
         data = bullet.GetData()
@@ -662,6 +754,7 @@ Function check_enemy_bullet_collision()
                     end if
                     if item.GetData() = -2
                         m.snd_absorb.Trigger(80)
+                        m.spr_fake_bullets.Push({startx: m.spr_enemy_bullet[a-d].GetX(), starty: m.spr_enemy_bullet[a-d].GetY(), timer: CreateObject("roTimeSpan"),paused_time: 0 })
                         m.spr_enemy_bullet[a-d].Remove()
                         m.spr_enemy_bullet.Delete(a-d)
                         m.ammo = m.ammo + 1
@@ -702,7 +795,7 @@ End Function
 Function shield()
     if m.dead = 0
         if m.shield_on = 1
-            m.spr_shield.MoveTo(m.spr_ship_x-33,m.ship_y-21)
+            m.spr_shield.MoveTo(m.spr_ship_x-33-10,m.ship_y-21-10)
             if m.shield_life > 0
                 m.shield_life = m.shield_life - (.3*(m.difficulty+1))
                 if m.shield_life < 0
@@ -746,11 +839,11 @@ End Function
 
 'Draw UI elements
 Function create_ui()
-    shield_life_color = int(65279+(m.shield_life*2.56))
-    if shield_life_color > 65535
-        shield_life_color = 65535
-    else if shield_life_color < 65279
-        shield_life_color = 65279
+    shield_life_alpha% = m.shield_life*1.25
+    if shield_life_alpha% > 255
+        shield_life_alpha% = 255
+    else if shield_life_alpha% < 0
+        shield_life_alpha% = 0
     end if
     x_adjustment = 0
     y_adjustment = 0 
@@ -761,14 +854,13 @@ Function create_ui()
         y_adjustment = 15
         x_adjustment = 20
     end if
-    m.screen.DrawRect(170,680-y_adjustment,m.shield_life*3,25,shield_life_color)
+    m.screen.DrawRect(170,680-y_adjustment,m.shield_life*3,25,m.shield_life_color-255%+shield_life_alpha%)
     m.screen.DrawRect(0,0,156,720,m.black)
     m.screen.DrawRect(1124,0,156,720,m.black)
     m.screen.DrawText("Score: "+str(m.score),640-(m.font.GetOneLineWidth("Score: "+str(m.score),1000)/2),20,m.white,m.font)
     m.screen.DrawText("Ammo: "+str(m.ammo),890-x_adjustment,660-y_adjustment,m.white,m.font) 
     m.screen.DrawText(str(int(m.shield_life))+"%",160,660-y_adjustment,m.white,m.font)
 End Function
-
 'Create enemy bullet 
 Function create_enemy_bullet(start_x,start_y,difficulty)
     new_enemy = m.compositor.NewSprite(start_x , start_y, m.region_enemy_bullet)
@@ -776,7 +868,6 @@ Function create_enemy_bullet(start_x,start_y,difficulty)
     m.spr_enemy_bullet.Push(new_enemy)
 End Function
 
-'Move Scrolling Background
 Function move_background()
     m.background_old_y = m.background_y
     m.background_y = m.LinearTween(0, 720, m.background_timer.TotalMilliseconds()-m.paused_time_background, m.background_speed)
@@ -790,7 +881,6 @@ Function move_background()
     end if
 End Function
 
-'Use Linear Tween to move ship (I know there's a better way but I just wanted to constistantly use the Linear Tween function to move all sprites)
 Function ship_move_speed()
     m.ship_old_x = m.ship_x
     m.ship_x = m.LinearTween(0, 868, m.ship_timer.TotalMilliseconds()-m.paused_time_ship, 2000)
@@ -803,19 +893,3 @@ Function ship_move_speed()
     end if
 End Function
 
-'Linear Tween Function
-Function linear_tween(start_pos, finish_pos, currentTime, duration)
-    If currentTime > duration Then Return finish_pos
-    change = finish_pos - start_pos
-    time = currentTime / duration
-    Return change * time + start_pos
-End Function
-
-'Not used, supposed to potentially fix audio dropping if two sounds play at once but it didn't seem to help for me.
-Function swap_audio_channel()
-    if m.audio_channel = 0
-        m.audio_channel = 1
-    else
-        m.audio_channel = 0
-    end if
-End Function

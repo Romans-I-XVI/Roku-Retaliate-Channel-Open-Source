@@ -1,7 +1,8 @@
-title=Retaliate - Open Source
+title=Retaliate
 major_version=1
-minor_version=0
+minor_version=6
 build_version=0
+bs_libs_required=roku_ads_lib
 mm_icon_focus_hd=pkg:/images/MainMenu_Icon_CenterFocus_HD.png
 mm_icon_side_hd=pkg:/images/MainMenu_Icon_Side_HD.png
 mm_icon_focus_sd=pkg:/images/MainMenu_Icon_CenterFocus_SD.png
@@ -9,4 +10,4 @@ mm_icon_side_sd=pkg:/images/MainMenu_Icon_Side_SD.png
 splash_screen_sd=pkg:/images/SD_Splash.png
 splash_screen_hd=pkg:/images/HD_Splash.png
 splash_color=#000000
-splash_min_time=500
+splash_min_time=1000

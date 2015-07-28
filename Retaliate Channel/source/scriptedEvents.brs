@@ -1,6 +1,5 @@
 'The scripted events are probably some of my most confusing and possibly improperly laid out portions of code, but hey, they work.
 
-'Randomly chooses a scripted event to execute.
 Function select_scripted_action()
     m.timer_scripts = m.timer_scripts+1
     if m.timer_scripts = m.random_number_4
@@ -11,7 +10,7 @@ Function select_scripted_action()
             random = rnd(4)-1
         end if
         m.run_script[random] = true
-        print "running script : " ; random
+        'print "running script : " ; random
         m.spawn_enemies = false
         if random = 2 or random = 3 or random = 4
             m.clear_enemy_2 = true
@@ -20,7 +19,6 @@ Function select_scripted_action()
         m.random_number_4 = 1000+rnd(2000)
     end if
 End Function
-
 'Creates a diamond pattern with enemy 1 (Not currently implemented)
 Function script_diamonds()
     m.timer_script = m.timer_script+1
